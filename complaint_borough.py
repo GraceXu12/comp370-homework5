@@ -3,55 +3,54 @@ import csv
 from datetime import datetime
 import sys
 
+def parse_date(date):
+    if "-" in date:
+        return datetime.strptime(date, "%Y-%m-%d")
+    return datetime.strptime(date, "%m/%d/%Y")
 
-def parse_date(date_str: str) -> datetime:
-    """Parses date string formatted as YYYY-MM-DD or MM/DD/YYYY."""
-    fmt = "%Y-%m-%d" if "-" in date_str else "%m/%d/%Y"
-    return datetime.strptime(date_str, fmt)
+parser = argparse.ArgumentParser()
+parser.add_argument("-i", "--input", required=True)
+parser.add_argument("-s", "--start_date", required=True)
+parser.add_argument("-e", "--end_date", required=True)
+parser.add_argument("-o", "--output")
+args = parser.parse_args()
 
+start = parse_date(args.start_date)
+end = parse_date(args.end_date)
+counts = {}
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--input", required=True, type=str)
-    parser.add_argument("-s", "--start_date", required=True, type=str)
-    parser.add_argument("-e", "--end_date", required=True, type=str)
-    parser.add_argument("-o", "--output", type=str)
-    args = parser.parse_args()
+with open(args.input, "r", encoding="utf-8", errors="replace") as f:
+    reader = csv.DictReader(f)
 
-    start_date = parse_date(args.start_date)
-    end_date = parse_date(args.end_date)
-    counts = {}
+    for row in reader:
+        created = row["Created Date"].strip()
 
-    with open(args.input, "r", encoding="utf-8", errors="replace") as f:
-        for row in csv.DictReader(f):
-            created = row.get("Created Date", "").strip()
-            if not created:
-                continue
+        if not created:
+            continue
 
-            try:
-                date = parse_date(created.split()[0])
-            except ValueError:
-                continue
+        try:
+            date = parse_date(created.split()[0])
+        except ValueError:
+            continue
 
-            if start_date <= date <= end_date:
-                complaint = row.get("Complaint Type", "Unspecified").strip()
-                borough = row.get("Borough", "Unspecified").strip()
-                counts[(complaint, borough)] = counts.get((complaint, borough), 0) + 1
-    
-    if args.output:
-        out_stream = open(args.output, "w", newline="", encoding="utf-8")
-    else:
-        out_stream = sys.stdout
+        if start <= date <= end:
+            complaint = row["Complaint Type"].strip()
+            borough = row["Borough"].strip()
+            key = (complaint, borough)
 
-    try:
-        writer = csv.writer(out_stream)
-        writer.writerow(["complaint_type", "borough", "count"])
-        for (complaint, borough), count in sorted(counts.items()):
-            writer.writerow([complaint, borough, count])
-    finally:
-        if args.output:
-            out_stream.close()
+            counts[key] = counts.get(key, 0) + 1
 
+# Write results
+if args.output:
+    output = open(args.output, "w", newline="", encoding="utf-8")
+else:
+    output = sys.stdout
 
-if __name__ == "__main__":
-    main()
+writer = csv.writer(output)
+writer.writerow(["complaint_type", "borough", "count"])
+
+for (complaint, borough), count in sorted(counts.items()):
+    writer.writerow([complaint, borough, count])
+
+if args.output:
+    output.close()
